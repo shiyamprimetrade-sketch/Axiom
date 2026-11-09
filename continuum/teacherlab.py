@@ -184,7 +184,11 @@ def persist_jsonl(path:Path, records):
         for r in records:h.write(json.dumps(r,ensure_ascii=False,sort_keys=True)+'\n')
 
 def read_jsonl(path:Path):
-    with path.open(encoding='utf8') as h:
+    # Fresh Git clones carry the compressed synthetic corpus, not its generated plaintext.
+    if not path.exists() and path.with_suffix(path.suffix+'.gz').exists():
+        path=path.with_suffix(path.suffix+'.gz')
+    opener=gzip.open if path.suffix=='.gz' else open
+    with opener(path,'rt',encoding='utf8') as h:
         for line in h:
             if line.strip():yield json.loads(line)
 
