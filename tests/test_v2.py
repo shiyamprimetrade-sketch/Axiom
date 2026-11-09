@@ -1,4 +1,5 @@
 import io
+import importlib.util
 import json
 import tempfile
 import threading
@@ -68,6 +69,7 @@ class TranscriptTest(unittest.TestCase):
         tok=ByteTokenizer();txt='Axiom — বাংলা 😀'
         self.assertEqual(tok.decode(tok.encode(txt)),txt)
         self.assertEqual(tok.vocab_size,256)
+    @unittest.skipUnless(importlib.util.find_spec("torch") is not None,"PyTorch is an optional extra")
     def test_small_model_training_and_inference(self):
         # Small deterministic toy corpus: proves algorithm and save/load, not fluency.
         path=Path(self.t.name)/'tiny.pt'
