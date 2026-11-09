@@ -263,16 +263,26 @@ def _import_chatgpt(self, document, title_contains='', redact=True):
             'redacted':redact,'media':'metadata placeholders only'}
 
 def _search_history(self,pid,query,limit=20):
+    """Bounded, relevance-ranked keyword recall within one project only."""
+    import re
     self.get_project(pid)
     query=str(query).strip()
-    if not 2<=len(query)<=200:raise ValueError('Search needs 2–200 characters')
-    words=[w for w in query.split() if len(w)>=2][:5]
+    if not 2<=len(query)<=500:raise ValueError('Search needs 2–500 characters')
+    stop={'what','when','where','why','which','with','this','that','have','from',
+          'about','your','mine','does','said','tell','please','could','would','should',
+          'the','and','for','are','was','were','did','how','can','you','me','my','our'}
+    words=[]
+    for w in re.findall(r'[^\W_]{3,}',query.casefold()):
+        if w not in stop and w not in words:words.append(w)
+    words=words[:7]
     if not words:raise ValueError('Search needs a meaningful word')
-    terms=['m.content LIKE ? ESCAPE \'\\\'' for _ in words]
-    sql=('SELECT m.id,m.role,m.content,m.created_at,s.id AS session_id,s.title '
+    pats=['%'+w.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%' for w in words]
+    rank=' + '.join('CASE WHEN m.content LIKE ? ESCAPE \'\\\' THEN 1 ELSE 0 END' for _ in words)
+    match=' OR '.join('m.content LIKE ? ESCAPE \'\\\'' for _ in words)
+    sql=('SELECT m.id,m.role,m.content,m.created_at,s.id AS session_id,s.title, ('+rank+') AS relevance '
          'FROM messages m JOIN sessions s ON m.session_id=s.id '
-         'WHERE s.project_id=? AND '+' AND '.join(terms)+' ORDER BY m.rowid DESC LIMIT ?')
-    params=[pid]+['%'+w.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%' for w in words]+[min(100,int(limit))]
+         'WHERE s.project_id=? AND ('+match+') ORDER BY relevance DESC, m.rowid DESC LIMIT ?')
+    params=pats+[pid]+pats+[min(100,max(1,int(limit)))]
     with self.connect() as db:
         return [{**dict(r),'content':r['content'][:1300]} for r in db.execute(sql,params)]
 
